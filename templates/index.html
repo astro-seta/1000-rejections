@@ -556,6 +556,17 @@
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  #grid td.next {
+  box-shadow: inset 0 0 0 2px var(--accent);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  50% { box-shadow: inset 0 0 0 2px var(--accent), 0 0 12px var(--yellow-glow); }
+}
+#grid td:not(.pending):not(.rejected):not(.success):not(.next) {
+  cursor: not-allowed;
+}
 </style>
 </head>
 <body>
@@ -678,7 +689,7 @@
 
 <!-- Main Grid -->
 <div id="main">
-  <div class="grid-label">1000 attempts — click any cell to log a try</div>
+  <div class="grid-label">1000 attempts — click the highlighted cell to log a try</div>
   <div id="grid-wrapper">
     <table id="grid"></table>
   </div>
@@ -746,6 +757,19 @@ function getCols() {
   return window.innerWidth >= 700 ? 25 : 10;
 }
 
+function getNextIdx() {
+  for (let i = 1; i <= TOTAL; i++) {
+    if (!cellData[i]) return i;
+  }
+  return null;
+}
+
+function highlightNext() {
+  document.querySelectorAll('#grid td.next').forEach(td => td.classList.remove('next'));
+  const n = getNextIdx();
+  if (n) document.getElementById(`cell-${n}`)?.classList.add('next');
+}
+
 function buildGrid() {
   const COLS = getCols();
   const ROWS = TOTAL / COLS;
@@ -759,14 +783,17 @@ function buildGrid() {
       const td = document.createElement('td');
       td.id = `cell-${idx}`;
       td.innerHTML = `<span class="cell-num">${idx}</span>`;
-      td.addEventListener('click', () => openModal(idx));
+      td.addEventListener('click', () => {
+        if (cellData[idx] || idx === getNextIdx()) openModal(idx);
+      });
       tr.appendChild(td);
     }
     grid.appendChild(tr);
   }
   // Reapply saved data
   Object.entries(cellData).forEach(([id, d]) => applyCell(id, d));
-}
+  highlightNext();
+} 
 
 let resizeTimer;
 window.addEventListener('resize', () => {
@@ -780,6 +807,7 @@ async function loadData() {
   cellData = await res.json();
   buildGrid();
   updateStats();
+  //highlightNext();
 }
 
 function applyCell(id, d) {
@@ -832,7 +860,7 @@ function updateStats() {
     const dPending = pPending * circ;
     const dSuccess = pS * circ;
     const dRejected = pR * circ;
-    const gap = circ - dPending - dSuccess - dRejected;
+    //const gap = circ - dPending - dSuccess - dRejected;
 
     document.getElementById('donut-pending').setAttribute('stroke-dasharray', `${dPending} ${circ - dPending}`);
     document.getElementById('donut-pending').setAttribute('stroke-dashoffset', circ * 0.25);
@@ -916,6 +944,7 @@ async function saveEntry() {
   cellData[activeCellId] = payload;
   applyCell(activeCellId, payload);
   updateStats();
+  highlightNext();
   closeModal();
 }
 
@@ -931,6 +960,7 @@ async function setOutcome(outcome) {
   cellData[activeCellId] = d;
   applyCell(activeCellId, d);
   updateStats();
+  highlightNext();
   closeModal();
 }
 
@@ -940,6 +970,7 @@ async function resetCell() {
   const td = document.getElementById(`cell-${activeCellId}`);
   if (td) td.className = '';
   updateStats();
+  highlightNext();
   closeModal();
 }
 
