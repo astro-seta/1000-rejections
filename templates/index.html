@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>1000 Rejections</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #fdf6fb;
+    --surface: #fff0f9;
+    --surface2: #fce8f5;
+    --border: #e8c9e8;
+    --text: #4a2a5a;
+    --text-muted: #a07ab0;
+    --accent: #4a2a5a;
+    --yellow: #c084d4;
+    --yellow-glow: rgba(192,132,229,0.22);
+    --red: #e07ab0;
+    --red-glow: rgba(224,122,176,0.22);
+    --green: #b9d4a5;
+    --green-glow: rgba(183, 211, 166, 0.5);
+    --cell-empty: #fae8f8;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+  }
+
+  /* SIDEBAR */
+  #sidebar {
+    position: fixed;
+    top: 0; right: -420px;
+    width: 420px;
+    height: 100vh;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    z-index: 200;
+    transition: right 0.4s cubic-bezier(0.16,1,0.3,1);
+    display: flex;
+    flex-direction: column;
+    padding: 36px 32px;
+    gap: 28px;
+    overflow-y: auto;
+  }
+  #sidebar.open { right: 0; }
+
+  #sidebar-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 199;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.3s;
+  }
+  #sidebar-overlay.visible { opacity: 1; pointer-events: all; }
+
+  .sidebar-close {
+    position: absolute; top: 20px; right: 24px;
+    background: none; border: none;
+    color: var(--text-muted); font-size: 22px; cursor: pointer;
+    transition: color 0.2s;
+  }
+  .sidebar-close:hover { color: var(--text); }
+
+  .sidebar-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 38px;
+    letter-spacing: 2px;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .stat-row {
+    display: flex;
+    gap: 12px;
+  }
+  .stat-card {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .stat-card .label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-muted);
+  }
+  .stat-card .value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 40px;
+    line-height: 1;
+  }
+  .stat-card.tries .value { color: var(--yellow); }
+  .stat-card.successes .value { color: var(--green); }
+  .stat-card.rejections .value { color: var(--red); }
+
+  .donut-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+  .donut-wrapper h3 {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-muted);
+    align-self: flex-start;
+  }
+
+  #donutChart {
+    width: 200px;
+    height: 200px;
+  }
+
+  .legend {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .legend-item span.pct {
+    margin-left: auto;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--text);
+  }
+
+  .progress-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .progress-bars h3 {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+  .progress-item { display: flex; flex-direction: column; gap: 6px; }
+  .progress-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-muted);
+    font-family: 'DM Mono', monospace;
+  }
+  .progress-track {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.8s cubic-bezier(0.16,1,0.3,1);
+  }
+
+  /* HEADER */
+  #header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: 18px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .header-left {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .site-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 32px;
+    letter-spacing: 3px;
+    color: var(--text);
+    line-height: 1;
+  }
+  .site-tagline {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 1px;
+  }
+
+  #stats-mini {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+  }
+  .mini-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  .mini-stat .n {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    line-height: 1;
+  }
+  .mini-stat .l {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+  }
+  .mini-stat.t .n { color: var(--yellow); }
+  .mini-stat.s .n { color: var(--green); }
+  .mini-stat.r .n { color: var(--red); }
+
+  #open-sidebar-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  #open-sidebar-btn:hover {
+    background: var(--border);
+    border-color: #3a3a3a;
+  }
+
+  /* MAIN GRID */
+  #main {
+    padding: 32px 24px 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .grid-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    width: calc(25 * 44px);
+    max-width: 100%;
+  }
+
+  #grid-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+
+  #grid {
+    border-collapse: collapse;
+    table-layout: fixed;
+    width: calc(var(--cols) * 44px);
+    min-width: calc(var(--cols) * 44px);
+  }
+
+  #grid td {
+    width: 44px;
+    height: 44px;
+    border: 1px solid var(--border);
+    background: var(--cell-empty);
+    cursor: pointer;
+    position: relative;
+    transition: transform 0.12s, box-shadow 0.12s;
+  }
+
+  #grid td:hover {
+    transform: scale(1.08);
+    z-index: 2;
+    box-shadow: 0 0 0 2px rgba(232,226,217,0.2);
+  }
+
+  #grid td.pending {
+    background: var(--yellow);
+    box-shadow: 0 0 14px var(--yellow-glow);
+  }
+  #grid td.rejected {
+    background: var(--red);
+    box-shadow: 0 0 14px var(--red-glow);
+  }
+  #grid td.success {
+    background: var(--green);
+    box-shadow: 0 0 14px var(--green-glow);
+  }
+
+  #grid td .cell-num {
+    position: absolute;
+    bottom: 3px; right: 4px;
+    font-family: 'DM Mono', monospace;
+    font-size: 8px;
+    color: rgba(232,226,217,0.2);
+    pointer-events: none;
+    line-height: 1;
+  }
+  #grid td.pending .cell-num,
+  #grid td.rejected .cell-num,
+  #grid td.success .cell-num {
+    color: rgba(255,255,255,0.3);
+  }
+
+  /* POPUP MODAL */
+  #modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 300;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.25s;
+    backdrop-filter: blur(4px);
+  }
+  #modal-overlay.visible { opacity: 1; pointer-events: all; }
+
+  #modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 36px 32px;
+    width: 420px;
+    max-width: 95vw;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    transform: translateY(12px) scale(0.97);
+    transition: transform 0.3s cubic-bezier(0.16,1,0.3,1);
+    position: relative;
+  }
+  #modal-overlay.visible #modal {
+    transform: translateY(0) scale(1);
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .modal-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 26px;
+    letter-spacing: 2px;
+    line-height: 1;
+  }
+  .modal-close {
+    background: none; border: none;
+    color: var(--text-muted);
+    font-size: 20px; cursor: pointer;
+    transition: color 0.2s;
+    line-height: 1;
+    padding: 2px;
+  }
+  .modal-close:hover { color: var(--text); }
+
+  .modal-cell-id {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  /* Entry form */
+  #entry-form { display: flex; flex-direction: column; gap: 16px; }
+  #entry-form label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    display: block;
+    margin-bottom: 6px;
+  }
+  #entry-form input[type="text"],
+  #entry-form textarea {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    padding: 12px 14px;
+    outline: none;
+    transition: border-color 0.2s;
+    resize: none;
+  }
+  #entry-form input[type="text"]:focus,
+  #entry-form textarea:focus {
+    border-color: rgba(232,226,217,0.4);
+  }
+  #entry-form textarea { height: 90px; }
+
+  .btn-save {
+    background: var(--yellow);
+    color: #0d0d0d;
+    border: none;
+    border-radius: 8px;
+    padding: 13px 0;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    font-weight: 500;
+  }
+  .btn-save:hover { opacity: 0.85; }
+
+  /* Outcome buttons */
+  #outcome-form { display: flex; flex-direction: column; gap: 16px; }
+
+  .outcome-msg {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+
+  .outcome-buttons { display: flex; gap: 12px; }
+
+  .btn-outcome {
+    flex: 1;
+    border: none;
+    border-radius: 10px;
+    padding: 18px 10px;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-outcome:hover { transform: translateY(-3px); }
+  .btn-outcome .icon { font-size: 28px; }
+  .btn-outcome .sublabel {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    font-weight: 400;
+    opacity: 0.7;
+    letter-spacing: 0;
+  }
+
+  .btn-reject {
+    background: var(--red);
+    color: white;
+    box-shadow: 0 6px 24px var(--red-glow);
+  }
+  .btn-success {
+    background: var(--green);
+    color: white;
+    box-shadow: 0 6px 24px var(--green-glow);
+  }
+
+  /* Info view */
+  #info-view { display: flex; flex-direction: column; gap: 16px; }
+
+  .info-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    width: fit-content;
+  }
+  .info-badge.rejected { background: var(--red-glow); color: var(--red); border: 1px solid var(--red); }
+  .info-badge.success { background: var(--green-glow); color: var(--green); border: 1px solid var(--green); }
+  .info-badge.pending { background: var(--yellow-glow); color: var(--yellow); border: 1px solid var(--yellow); }
+
+  .info-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 24px;
+    letter-spacing: 1px;
+    line-height: 1.2;
+  }
+  .info-desc {
+    font-size: 14px;
+    color: var(--text-muted);
+    line-height: 1.7;
+    background: var(--surface2);
+    padding: 14px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .info-date {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+  }
+
+  .btn-reset {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    border-radius: 8px;
+    padding: 10px 0;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+    margin-top: 4px;
+  }
+  .btn-reset:hover { border-color: var(--red); color: var(--red); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- Sidebar overlay -->
+<div id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<!-- Sidebar -->
+<div id="sidebar">
+  <button class="sidebar-close" onclick="closeSidebar()">✕</button>
+  <div class="sidebar-title">Analysis</div>
+
+  <div class="stat-row">
+    <div class="stat-card tries">
+      <div class="label">Total Tries</div>
+      <div class="value" id="sb-tries">0</div>
+    </div>
+    <div class="stat-card successes">
+      <div class="label">Successes</div>
+      <div class="value" id="sb-success">0</div>
+    </div>
+    <div class="stat-card rejections">
+      <div class="label">Rejections</div>
+      <div class="value" id="sb-rejected">0</div>
+    </div>
+  </div>
+
+  <div class="progress-bars">
+    <h3>Completion</h3>
+    <div class="progress-item">
+      <div class="progress-label">
+        <span>Progress to 1000</span>
+        <span id="pb-tries-label">0%</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="pb-tries" style="width:0%;background:var(--yellow)"></div>
+      </div>
+    </div>
+    <div class="progress-item">
+      <div class="progress-label">
+        <span>Success Rate</span>
+        <span id="pb-success-label">0%</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="pb-success" style="width:0%;background:var(--green)"></div>
+      </div>
+    </div>
+    <div class="progress-item">
+      <div class="progress-label">
+        <span>Rejection Rate</span>
+        <span id="pb-rejected-label">0%</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="pb-rejected" style="width:0%;background:var(--red)"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="donut-wrapper">
+    <h3>Outcome Breakdown</h3>
+    <svg id="donutChart" viewBox="0 0 200 200">
+      <circle cx="100" cy="100" r="70" fill="none" stroke="#e8c9e8" stroke-width="28"/>
+      <circle id="donut-pending" cx="100" cy="100" r="70" fill="none"
+        stroke="#f5c842" stroke-width="28"
+        stroke-dasharray="0 440" stroke-dashoffset="110"
+        style="transition:stroke-dasharray 0.8s cubic-bezier(0.16,1,0.3,1); transform:rotate(-90deg); transform-origin:center"/>
+      <circle id="donut-success" cx="100" cy="100" r="70" fill="none"
+        stroke="#4fba6f" stroke-width="28"
+        stroke-dasharray="0 440" stroke-dashoffset="110"
+        style="transition:stroke-dasharray 0.8s cubic-bezier(0.16,1,0.3,1); transform:rotate(-90deg); transform-origin:center"/>
+      <circle id="donut-rejected" cx="100" cy="100" r="70" fill="none"
+        stroke="#d94f4f" stroke-width="28"
+        stroke-dasharray="0 440" stroke-dashoffset="110"
+        style="transition:stroke-dasharray 0.8s cubic-bezier(0.16,1,0.3,1); transform:rotate(-90deg); transform-origin:center"/>
+      <text x="100" y="95" text-anchor="middle" fill="#4a2a5a"
+        font-family="Bebas Neue, sans-serif" font-size="34" id="donut-center-n">0</text>
+      <text x="100" y="115" text-anchor="middle" fill="#a07ab0"
+        font-family="DM Mono, monospace" font-size="10" letter-spacing="2">TRIES</text>
+    </svg>
+    <div class="legend">
+      <div class="legend-item">
+        <div class="legend-dot" style="background:var(--yellow)"></div>
+        <span>In Progress</span>
+        <span class="pct" id="leg-pending">0%</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:var(--green)"></div>
+        <span>Accidental Success</span>
+        <span class="pct" id="leg-success">0%</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:var(--red)"></div>
+        <span>Rejection</span>
+        <span class="pct" id="leg-rejected">0%</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Header -->
+<div id="header">
+  <div class="header-left">
+    <div class="site-title">1000 Rejections</div>
+    <div class="site-tagline">embrace failure · collect rejections · stumble into success</div>
+  </div>
+  <div id="stats-mini">
+    <div class="mini-stat t"><div class="n" id="mini-tries">0</div><div class="l">Tries</div></div>
+    <div class="mini-stat s"><div class="n" id="mini-success">0</div><div class="l">Success</div></div>
+    <div class="mini-stat r"><div class="n" id="mini-rejected">0</div><div class="l">Rejected</div></div>
+  </div>
+  <button id="open-sidebar-btn" onclick="openSidebar()">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <rect x="0" y="1" width="14" height="2" rx="1" fill="currentColor"/>
+      <rect x="0" y="6" width="10" height="2" rx="1" fill="currentColor"/>
+      <rect x="0" y="11" width="12" height="2" rx="1" fill="currentColor"/>
+    </svg>
+    Analysis
+  </button>
+</div>
+
+<!-- Main Grid -->
+<div id="main">
+  <div class="grid-label">1000 attempts — click any cell to log a try</div>
+  <div id="grid-wrapper">
+    <table id="grid"></table>
+  </div>
+</div>
+
+<!-- Modal -->
+<div id="modal-overlay">
+  <div id="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="modal-title-text">LOG A TRY</div>
+        <div class="modal-cell-id" id="modal-cell-id">#001</div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+
+    <!-- Phase 1: Entry form -->
+    <div id="entry-form">
+      <div>
+        <label>What did you try?</label>
+        <input type="text" id="input-title" placeholder="e.g. Applied for the job at Anthropic" maxlength="80"/>
+      </div>
+      <div>
+        <label>Details</label>
+        <textarea id="input-desc" placeholder="What happened? Who did you reach out to? What was the context?"></textarea>
+      </div>
+      <button class="btn-save" onclick="saveEntry()">Mark as Tried →</button>
+    </div>
+
+    <!-- Phase 2: Outcome buttons -->
+    <div id="outcome-form" style="display:none">
+      <div class="outcome-msg">You already logged this attempt. What was the outcome?</div>
+      <div class="outcome-buttons">
+        <button class="btn-outcome btn-reject" onclick="setOutcome('rejected')">
+          <span class="icon">✗</span>
+          Rejected
+          <span class="sublabel">they said no</span>
+        </button>
+        <button class="btn-outcome btn-success" onclick="setOutcome('success')">
+          <span class="icon">✦</span>
+          Success
+          <span class="sublabel">accidental win</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Phase 3: Info view -->
+    <div id="info-view" style="display:none">
+      <div id="info-badge-el" class="info-badge"></div>
+      <div class="info-title" id="info-title-el"></div>
+      <div class="info-desc" id="info-desc-el"></div>
+      <div class="info-date" id="info-date-el"></div>
+      <button class="btn-reset" onclick="resetCell()">↺ Reset this cell</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const TOTAL = 1000;
+
+let cellData = {};
+let activeCellId = null;
+
+function getCols() {
+  return window.innerWidth >= 700 ? 25 : 10;
+}
+
+function buildGrid() {
+  const COLS = getCols();
+  const ROWS = TOTAL / COLS;
+  document.documentElement.style.setProperty('--cols', COLS);
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  for (let r = 0; r < ROWS; r++) {
+    const tr = document.createElement('tr');
+    for (let c = 0; c < COLS; c++) {
+      const idx = r * COLS + c + 1;
+      const td = document.createElement('td');
+      td.id = `cell-${idx}`;
+      td.innerHTML = `<span class="cell-num">${idx}</span>`;
+      td.addEventListener('click', () => openModal(idx));
+      tr.appendChild(td);
+    }
+    grid.appendChild(tr);
+  }
+  // Reapply saved data
+  Object.entries(cellData).forEach(([id, d]) => applyCell(id, d));
+}
+
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(buildGrid, 200);
+});
+
+// Load data from server
+async function loadData() {
+  const res = await fetch('/api/cells');
+  cellData = await res.json();
+  buildGrid();
+  updateStats();
+}
+
+function applyCell(id, d) {
+  const td = document.getElementById(`cell-${id}`);
+  if (!td) return;
+  td.className = '';
+  if (d.status === 'pending') td.classList.add('pending');
+  else if (d.status === 'rejected') td.classList.add('rejected');
+  else if (d.status === 'success') td.classList.add('success');
+}
+
+function updateStats() {
+  let tries = 0, successes = 0, rejected = 0, pending = 0;
+  Object.values(cellData).forEach(d => {
+    tries++;
+    if (d.status === 'success') successes++;
+    else if (d.status === 'rejected') rejected++;
+    else if (d.status === 'pending') pending++;
+  });
+
+  // Mini header stats
+  document.getElementById('mini-tries').textContent = tries;
+  document.getElementById('mini-success').textContent = successes;
+  document.getElementById('mini-rejected').textContent = rejected;
+
+  // Sidebar stats
+  document.getElementById('sb-tries').textContent = tries;
+  document.getElementById('sb-success').textContent = successes;
+  document.getElementById('sb-rejected').textContent = rejected;
+
+  // Progress bars
+  const pTries = Math.round((tries / TOTAL) * 100);
+  const pSuccess = tries > 0 ? Math.round((successes / tries) * 100) : 0;
+  const pRejected = tries > 0 ? Math.round((rejected / tries) * 100) : 0;
+
+  document.getElementById('pb-tries').style.width = pTries + '%';
+  document.getElementById('pb-tries-label').textContent = pTries + '%';
+  document.getElementById('pb-success').style.width = pSuccess + '%';
+  document.getElementById('pb-success-label').textContent = pSuccess + '%';
+  document.getElementById('pb-rejected').style.width = pRejected + '%';
+  document.getElementById('pb-rejected-label').textContent = pRejected + '%';
+
+  // Donut
+  document.getElementById('donut-center-n').textContent = tries;
+  const circ = 2 * Math.PI * 70;
+  if (tries > 0) {
+    const pPending = pending / tries;
+    const pS = successes / tries;
+    const pR = rejected / tries;
+    const dPending = pPending * circ;
+    const dSuccess = pS * circ;
+    const dRejected = pR * circ;
+    const gap = circ - dPending - dSuccess - dRejected;
+
+    document.getElementById('donut-pending').setAttribute('stroke-dasharray', `${dPending} ${circ - dPending}`);
+    document.getElementById('donut-pending').setAttribute('stroke-dashoffset', circ * 0.25);
+
+    document.getElementById('donut-success').setAttribute('stroke-dasharray', `${dSuccess} ${circ - dSuccess}`);
+    document.getElementById('donut-success').setAttribute('stroke-dashoffset', circ * 0.25 - dPending);
+
+    document.getElementById('donut-rejected').setAttribute('stroke-dasharray', `${dRejected} ${circ - dRejected}`);
+    document.getElementById('donut-rejected').setAttribute('stroke-dashoffset', circ * 0.25 - dPending - dSuccess);
+  } else {
+    ['pending','success','rejected'].forEach(k => {
+      document.getElementById(`donut-${k}`).setAttribute('stroke-dasharray', `0 ${circ}`);
+    });
+  }
+
+  // Legend %
+  document.getElementById('leg-pending').textContent = tries > 0 ? Math.round(pending/tries*100)+'%' : '0%';
+  document.getElementById('leg-success').textContent = tries > 0 ? Math.round(successes/tries*100)+'%' : '0%';
+  document.getElementById('leg-rejected').textContent = tries > 0 ? Math.round(rejected/tries*100)+'%' : '0%';
+}
+
+// Modal logic
+function openModal(idx) {
+  activeCellId = idx;
+  const d = cellData[idx];
+
+  document.getElementById('modal-cell-id').textContent = `#${String(idx).padStart(3,'0')}`;
+  document.getElementById('entry-form').style.display = 'none';
+  document.getElementById('outcome-form').style.display = 'none';
+  document.getElementById('info-view').style.display = 'none';
+
+  if (!d) {
+    // No data: show entry form
+    document.getElementById('modal-title-text').textContent = 'LOG A TRY';
+    document.getElementById('input-title').value = '';
+    document.getElementById('input-desc').value = '';
+    document.getElementById('entry-form').style.display = 'flex';
+  } else if (d.status === 'pending') {
+    // Pending: show outcome buttons
+    document.getElementById('modal-title-text').textContent = 'WHAT HAPPENED?';
+    document.getElementById('outcome-form').style.display = 'flex';
+  } else {
+    // Has outcome: show info
+    document.getElementById('modal-title-text').textContent = 'TRY DETAILS';
+    showInfo(d);
+  }
+
+  document.getElementById('modal-overlay').classList.add('visible');
+  if (!d) setTimeout(() => document.getElementById('input-title').focus(), 300);
+}
+
+function showInfo(d) {
+  const badge = document.getElementById('info-badge-el');
+  badge.className = 'info-badge ' + d.status;
+  if (d.status === 'rejected') badge.innerHTML = '✗ Rejected';
+  else if (d.status === 'success') badge.innerHTML = '✦ Accidental Success';
+  else badge.innerHTML = '⬤ In Progress';
+
+  document.getElementById('info-title-el').textContent = d.title || '—';
+  document.getElementById('info-desc-el').textContent = d.desc || '—';
+  const date = d.date ? new Date(d.date).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}) : '—';
+  document.getElementById('info-date-el').textContent = 'Logged on ' + date;
+  document.getElementById('info-view').style.display = 'flex';
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('visible');
+  activeCellId = null;
+}
+
+async function saveEntry() {
+  const title = document.getElementById('input-title').value.trim();
+  if (!title) { document.getElementById('input-title').focus(); return; }
+  const desc = document.getElementById('input-desc').value.trim();
+  const payload = { title, desc, status: 'pending', date: new Date().toISOString() };
+  await fetch(`/api/cells/${activeCellId}`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  });
+  cellData[activeCellId] = payload;
+  applyCell(activeCellId, payload);
+  updateStats();
+  closeModal();
+}
+
+async function setOutcome(outcome) {
+  const d = cellData[activeCellId];
+  d.status = outcome;
+  d.outcomeDate = new Date().toISOString();
+  await fetch(`/api/cells/${activeCellId}`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(d)
+  });
+  cellData[activeCellId] = d;
+  applyCell(activeCellId, d);
+  updateStats();
+  closeModal();
+}
+
+async function resetCell() {
+  await fetch(`/api/cells/${activeCellId}`, { method: 'DELETE' });
+  delete cellData[activeCellId];
+  const td = document.getElementById(`cell-${activeCellId}`);
+  if (td) td.className = '';
+  updateStats();
+  closeModal();
+}
+
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebar-overlay').classList.add('visible');
+  updateStats();
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('visible');
+}
+
+// Close modal on overlay click
+document.getElementById('modal-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// ESC key
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeModal(); closeSidebar(); }
+});
+
+loadData();
+</script>
+</body>
+</html>
