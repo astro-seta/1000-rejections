@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>{{ 'Sign up' if mode == 'signup' else 'Log in' }} · 1000 Rejections</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:#fdf6fb; --surface:#fff0f9; --surface2:#fce8f5; --border:#e8c9e8;
+    --text:#4a2a5a; --text-muted:#a07ab0; --yellow:#c084d4; --red:#e07ab0;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background:var(--bg); color:var(--text);
+    font-family:'DM Sans',sans-serif; min-height:100vh;
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .card {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:16px; padding:36px 32px; width:380px; max-width:100%;
+    display:flex; flex-direction:column; gap:18px;
+  }
+  .title { font-family:'Bebas Neue',sans-serif; font-size:34px; letter-spacing:3px; line-height:1; }
+  .sub { font-family:'DM Mono',monospace; font-size:11px; letter-spacing:1px; color:var(--text-muted); }
+  label {
+    display:block; margin-bottom:6px; font-family:'DM Mono',monospace;
+    font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--text-muted);
+  }
+  input {
+    width:100%; background:var(--surface2); border:1px solid var(--border);
+    border-radius:8px; color:var(--text); font-family:'DM Sans',sans-serif;
+    font-size:14px; padding:12px 14px; outline:none;
+  }
+  input:focus { border-color:var(--text-muted); }
+  .field { margin-bottom:14px; }
+  button {
+    width:100%; background:var(--yellow); color:#0d0d0d; border:none;
+    border-radius:8px; padding:13px 0; font-family:'DM Mono',monospace;
+    font-size:12px; letter-spacing:2px; text-transform:uppercase;
+    cursor:pointer; font-weight:500;
+  }
+  button:hover { opacity:0.85; }
+  .error {
+    background:rgba(224,122,176,0.15); border:1px solid var(--red);
+    color:var(--text); border-radius:8px; padding:10px 12px; font-size:13px;
+  }
+  .switch { font-size:13px; color:var(--text-muted); text-align:center; }
+  .switch a { color:var(--text); }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div>
+      <div class="title">1000 Rejections</div>
+      <div class="sub">{{ 'create your account' if mode == 'signup' else 'welcome back' }}</div>
+    </div>
+
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+    <form method="post">
+      <div class="field">
+        <label for="username">Username</label>
+        <input id="username" name="username" type="text" value="{{ username }}"
+               maxlength="30" autocomplete="username" required autofocus/>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" maxlength="128"
+               autocomplete="{{ 'new-password' if mode == 'signup' else 'current-password' }}" required/>
+      </div>
+      <button type="submit">{{ 'Sign up' if mode == 'signup' else 'Log in' }}</button>
+    </form>
+
+    <div class="switch">
+      {% if mode == 'signup' %}
+        Already have an account? <a href="{{ url_for('login') }}">Log in</a>
+      {% else %}
+        New here? <a href="{{ url_for('signup') }}">Sign up</a>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>

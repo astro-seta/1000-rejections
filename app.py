@@ -1,15 +1,25 @@
 import os
+import re
 import sqlite3
-from flask import Flask, render_template, request, jsonify, g
+from functools import wraps
+
+from flask import (Flask, render_template, request, jsonify, g,
+                   session, redirect, url_for)
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
+# Local development only. A real secret key is set on the server in Step 5.
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-only-change-me")
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_FILE = os.path.join(BASE_DIR, "app.db")
-TEMP_USER_ID = 1  # placeholder until login is added in the next step
 
 VALID_STATUSES = {"pending", "rejected", "success"}
 TOTAL_CELLS = 1000
+USERNAME_RE = re.compile(r"^[a-z0-9_]{3,30}$")
+VALID_THEMES = {"coquette", "minimal", "midnight", "sage", "cbsafe"}
 
 
 # ---------- Database helpers ----------
@@ -48,10 +58,11 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users(id)
         );
     """)
-    db.execute(
-        "INSERT OR IGNORE INTO users (id, username, password_hash) "
-        "VALUES (1, 'temp', 'x')"
-    )
+
+    cols = [r[1] for r in db.execute("PRAGMA table_info(users)")]
+    if "theme" not in cols:
+        db.execute("ALTER TABLE users ADD COLUMN theme TEXT NOT NULL DEFAULT 'coquette'")
+
     db.commit()
     db.close()
 
@@ -59,16 +70,98 @@ def init_db():
 init_db()
 
 
-# ---------- Routes ----------
+# ---------- Auth helpers ----------
+def login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if "user_id" not in session:
+            if request.path.startswith("/api/"):
+                return jsonify({"error": "not logged in"}), 401
+            return redirect(url_for("login"))
+        return view(*args, **kwargs)
+    return wrapped
+
+
+def current_user_id():
+    return session["user_id"]
+
+
+# ---------- Auth routes ----------
+@app.route("/signup", methods=["GET", "POST"])
+def signup():
+    if "user_id" in session:
+        return redirect(url_for("index"))
+    error, username = None, ""
+    if request.method == "POST":
+        username = request.form.get("username", "").strip().lower()
+        password = request.form.get("password", "")
+        if not USERNAME_RE.match(username):
+            error = "Username must be 3-30 characters: letters, numbers or underscore."
+        elif len(password) < 8:
+            error = "Password must be at least 8 characters."
+        elif len(password) > 128:
+            error = "Password is too long (max 128 characters)."
+        else:
+            db = get_db()
+            try:
+                cur = db.execute(
+                    "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+                    (username, generate_password_hash(password)),
+                )
+                db.commit()
+            except sqlite3.IntegrityError:
+                error = "That username is already taken."
+            else:
+                session.clear()
+                session["user_id"] = cur.lastrowid
+                session["username"] = username
+                return redirect(url_for("index"))
+    return render_template("auth.html", mode="signup", error=error, username=username)
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if "user_id" in session:
+        return redirect(url_for("index"))
+    error, username = None, ""
+    if request.method == "POST":
+        username = request.form.get("username", "").strip().lower()
+        password = request.form.get("password", "")
+        row = get_db().execute(
+            "SELECT id, username, password_hash FROM users WHERE username = ?",
+            (username,),
+        ).fetchone()
+        if row and len(password) <= 128 and check_password_hash(row["password_hash"], password):
+            session.clear()
+            session["user_id"] = row["id"]
+            session["username"] = row["username"]
+            return redirect(url_for("index"))
+        error = "Invalid username or password."
+    return render_template("auth.html", mode="login", error=error, username=username)
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
+# ---------- App routes ----------
 @app.route("/")
+@login_required
 def index():
-    return render_template("index.html")
+    row = get_db().execute(
+        "SELECT theme FROM users WHERE id = ?", (current_user_id(),)
+    ).fetchone()
+    theme = row["theme"] if row else "coquette"
+    return render_template("index.html", username=session["username"], theme=theme)
 
 
 @app.route("/api/cells", methods=["GET"])
+@login_required
 def get_cells():
     rows = get_db().execute(
-        "SELECT * FROM cells WHERE user_id = ?", (TEMP_USER_ID,)
+        "SELECT * FROM cells WHERE user_id = ?", (current_user_id(),)
     ).fetchall()
     result = {}
     for r in rows:
@@ -85,6 +178,7 @@ def get_cells():
 
 
 @app.route("/api/cells/<int:cell_id>", methods=["POST"])
+@login_required
 def update_cell(cell_id):
     if not 1 <= cell_id <= TOTAL_CELLS:
         return jsonify({"error": "invalid cell"}), 400
@@ -109,7 +203,7 @@ def update_cell(cell_id):
             date = excluded.date,
             outcome_date = excluded.outcome_date
         """,
-        (TEMP_USER_ID, cell_id, title, desc, status,
+        (current_user_id(), cell_id, title, desc, status,
          payload.get("date"), payload.get("outcomeDate")),
     )
     db.commit()
@@ -117,15 +211,27 @@ def update_cell(cell_id):
 
 
 @app.route("/api/cells/<int:cell_id>", methods=["DELETE"])
+@login_required
 def delete_cell(cell_id):
     db = get_db()
     db.execute(
         "DELETE FROM cells WHERE user_id = ? AND cell_id = ?",
-        (TEMP_USER_ID, cell_id),
+        (current_user_id(), cell_id),
     )
     db.commit()
     return jsonify({"ok": True})
 
+
+@app.route("/api/theme", methods=["POST"])
+@login_required
+def set_theme():
+    theme = (request.get_json(silent=True) or {}).get("theme")
+    if theme not in VALID_THEMES:
+        return jsonify({"error": "invalid theme"}), 400
+    db = get_db()
+    db.execute("UPDATE users SET theme = ? WHERE id = ?", (theme, current_user_id()))
+    db.commit()
+    return jsonify({"ok": True})
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

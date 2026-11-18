@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="{{ theme }}">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>1000 Rejections</title>
-<script>try{var t=localStorage.getItem('theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
 <style>
   :root {
@@ -674,6 +674,16 @@
   color: rgba(0,0,0,0.25);
 }
 
+.sp-account { margin-top:16px; padding-top:16px; border-top:1px solid var(--border); }
+.sp-user { font-size:14px; margin-bottom:10px; word-break:break-all; }
+.btn-logout {
+  width:100%; background:none; border:1px solid var(--border);
+  color:var(--text-muted); border-radius:8px; padding:10px 0;
+  font-family:'DM Mono',monospace; font-size:11px; letter-spacing:1px;
+  text-transform:uppercase; cursor:pointer;
+}
+.btn-logout:hover { border-color:var(--red); color:var(--red); }
+
 </style>
 </head>
 <body>
@@ -805,6 +815,13 @@
 <div id="settings-panel">
   <div class="sp-title">Theme</div>
   <div id="theme-options"></div>
+  <div class="sp-account">
+    <div class="sp-title">Account</div>
+    <div class="sp-user">{{ username }}</div>
+    <form method="post" action="/logout">
+      <button type="submit" class="btn-logout">Log out</button>
+    </form>
+  </div>
 </div>
 
 <!-- Main Grid -->
@@ -1123,11 +1140,17 @@ const THEMES = [
   { id:'cbsafe',   name:'Color-blind safe', colors:['#f7f7f7','#d55e00','#e69f00','#0072b2'] },
 ];
 
-function applyTheme(id) {
+function applyTheme(id, save) {
   document.documentElement.dataset.theme = id;
-  try { localStorage.setItem('theme', id); } catch(e) {}
   document.querySelectorAll('.theme-opt').forEach(b =>
     b.classList.toggle('active', b.dataset.id === id));
+  if (save) {
+    fetch('/api/theme', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ theme: id })
+    });
+  }
 }
 function toggleSettings(e) {
   e.stopPropagation();
@@ -1145,13 +1168,10 @@ THEMES.forEach(t => {
   b.className = 'theme-opt';
   b.dataset.id = t.id;
   b.innerHTML = `<span>${t.name}</span><span class="swatches">${t.colors.map(c => `<span style="background:${c}"></span>`).join('')}</span>`;
-  b.onclick = () => applyTheme(t.id);
+  b.onclick = () => applyTheme(t.id, true);
   document.getElementById('theme-options').appendChild(b);
 });
-let savedTheme = 'coquette';
-try { savedTheme = localStorage.getItem('theme') || 'coquette'; } catch(e) {}
-if (!THEMES.some(t => t.id === savedTheme)) savedTheme = 'coquette';
-applyTheme(savedTheme);
+applyTheme(document.documentElement.dataset.theme || 'coquette', false);
 
 
 loadData();
