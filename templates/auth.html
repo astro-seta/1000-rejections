@@ -7,8 +7,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
 <style>
   :root {
-    --bg:#fdf6fb; --surface:#fff0f9; --surface2:#fce8f5; --border:#e8c9e8;
-    --text:#4a2a5a; --text-muted:#a07ab0; --yellow:#c084d4; --red:#e07ab0;
+    --bg:#f4f1ea; --surface:#fbf9f4; --surface2:#ece8de; --border:#d9d3c4;
+    --text:#3b4136; --text-muted:#858a78;
+    --green:#7a9e7e; --red:#c46a5a;
   }
   * { margin:0; padding:0; box-sizing:border-box; }
   body {
@@ -20,6 +21,7 @@
     background:var(--surface); border:1px solid var(--border);
     border-radius:16px; padding:36px 32px; width:380px; max-width:100%;
     display:flex; flex-direction:column; gap:18px;
+    box-shadow:0 12px 32px rgba(59,65,54,0.08);
   }
   .title { font-family:'Bebas Neue',sans-serif; font-size:34px; letter-spacing:3px; line-height:1; }
   .sub { font-family:'DM Mono',monospace; font-size:11px; letter-spacing:1px; color:var(--text-muted); }
@@ -32,21 +34,23 @@
     border-radius:8px; color:var(--text); font-family:'DM Sans',sans-serif;
     font-size:14px; padding:12px 14px; outline:none;
   }
-  input:focus { border-color:var(--text-muted); }
+  input:focus { border-color:var(--green); }
   .field { margin-bottom:14px; }
   button {
-    width:100%; background:var(--yellow); color:#0d0d0d; border:none;
+    width:100%; background:var(--green); color:#1f261c; border:none;
     border-radius:8px; padding:13px 0; font-family:'DM Mono',monospace;
     font-size:12px; letter-spacing:2px; text-transform:uppercase;
     cursor:pointer; font-weight:500;
   }
   button:hover { opacity:0.85; }
   .error {
-    background:rgba(224,122,176,0.15); border:1px solid var(--red);
+    background:rgba(196,106,90,0.14); border:1px solid var(--red);
     color:var(--text); border-radius:8px; padding:10px 12px; font-size:13px;
   }
   .switch { font-size:13px; color:var(--text-muted); text-align:center; }
   .switch a { color:var(--text); }
+
+  .hp { position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden; }
 </style>
 </head>
 <body>
@@ -59,6 +63,14 @@
     {% if error %}<div class="error">{{ error }}</div>{% endif %}
 
     <form method="post">
+            {% if mode == 'signup' %}
+      <div class="hp" aria-hidden="true">
+        <label for="alt_contact">Leave this field empty</label>
+        <input id="alt_contact" name="alt_contact" type="text"
+               tabindex="-1" autocomplete="off"/>
+      </div>
+      {% endif %}
+      <!-- TURNSTILE: the Cloudflare widget will go here later -->
       <div class="field">
         <label for="username">Username</label>
         <input id="username" name="username" type="text" value="{{ username }}"

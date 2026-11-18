@@ -2,6 +2,9 @@ import os
 import re
 import sqlite3
 from functools import wraps
+from werkzeug.middleware.proxy_fix import ProxyFix
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 from flask import (Flask, render_template, request, jsonify, g,
                    session, redirect, url_for)
@@ -18,6 +21,17 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = IS_PROD
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024  # reject request bodies over 32 KB
+
+if IS_PROD:
+    # Behind nginx: read the visitor's real IP from the forwarded headers
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["600 per hour"],
+    storage_uri="memory://",
+)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_FILE = os.path.join(BASE_DIR, "app.db")
@@ -82,6 +96,16 @@ def add_security_headers(resp):
     resp.headers["Referrer-Policy"] = "same-origin"
     return resp
 
+@app.errorhandler(429)
+def too_many_requests(e):
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "too many requests"}), 429
+    mode = "signup" if request.path == "/signup" else "login"
+    return render_template(
+        "auth.html", mode=mode, username="",
+        error="Too many attempts. Please wait a while and try again."
+    ), 429
+
 # ---------- Auth helpers ----------
 def login_required(view):
     @wraps(view)
@@ -100,11 +124,15 @@ def current_user_id():
 
 # ---------- Auth routes ----------
 @app.route("/signup", methods=["GET", "POST"])
+@limiter.limit("5 per hour", methods=["POST"])
 def signup():
     if "user_id" in session:
         return redirect(url_for("index"))
     error, username = None, ""
     if request.method == "POST":
+                    if request.form.get("alt_contact"):
+            # Bots fill the hidden field. Pretend nothing happened.
+            return redirect(url_for("login"))
         username = request.form.get("username", "").strip().lower()
         password = request.form.get("password", "")
         if not USERNAME_RE.match(username):
@@ -132,11 +160,14 @@ def signup():
 
 
 @app.route("/login", methods=["GET", "POST"])
+@limiter.limit("10 per minute; 100 per hour", methods=["POST"])
 def login():
     if "user_id" in session:
         return redirect(url_for("index"))
     error, username = None, ""
     if request.method == "POST":
+
+ 
         username = request.form.get("username", "").strip().lower()
         password = request.form.get("password", "")
         row = get_db().execute(
@@ -244,6 +275,13 @@ def set_theme():
     db.execute("UPDATE users SET theme = ? WHERE id = ?", (theme, current_user_id()))
     db.commit()
     return jsonify({"ok": True})
+
+@app.route("/api/session", methods=["GET"])
+@login_required
+def check_session():
+    resp = jsonify({"ok": True})
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 if __name__ == "__main__":
     app.run(debug=not IS_PROD, port=5000)

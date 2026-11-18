@@ -684,6 +684,11 @@
 }
 .btn-logout:hover { border-color:var(--red); color:var(--red); }
 
+.sp-about { margin-top:16px; padding-top:16px; border-top:1px solid var(--border);
+  font-size:13px; color:var(--text-muted); line-height:1.5; }
+.sp-links { margin-top:8px; display:flex; gap:14px; }
+.sp-links a { color:var(--text); }
+
 </style>
 </head>
 <body>
@@ -822,6 +827,14 @@
       <button type="submit" class="btn-logout">Log out</button>
     </form>
   </div>
+    <div class="sp-about">
+    <div class="sp-title">About</div>
+    <p>Made by Seta. Need a website or app built?</p>
+    <div class="sp-links">
+      <a href="https://github.com/astro-seta" target="_blank" rel="noopener">GitHub</a>
+      {% comment %} <a href="mailto:you@example.com">Email</a> {% endcomment %}
+    </div>
+  </div>
 </div>
 
 <!-- Main Grid -->
@@ -920,8 +933,14 @@ function buildGrid() {
       const td = document.createElement('td');
       td.id = `cell-${idx}`;
       td.innerHTML = `<span class="cell-num">${idx}</span>`;
-      td.addEventListener('click', () => {
-        if (cellData[idx] || idx === getNextIdx()) openModal(idx);
+      td.addEventListener('click', async () => {
+        if (!(cellData[idx] || idx === getNextIdx())) return;
+        try {
+          await api('/api/session', { cache: 'no-store' });
+        } catch (e) {
+          return; // not logged in (redirecting) or the check failed
+        }
+        openModal(idx);
       });
       tr.appendChild(td);
     }
@@ -1186,6 +1205,12 @@ THEMES.forEach(t => {
 });
 applyTheme(document.documentElement.dataset.theme || 'coquette', false);
 
+// Re-check the session when the user comes back to this tab
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    api('/api/session', { cache: 'no-store' }).catch(() => {});
+  }
+});
 
 loadData();
 </script>
