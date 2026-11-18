@@ -8,10 +8,16 @@ from flask import (Flask, render_template, request, jsonify, g,
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-# Local development only. A real secret key is set on the server in Step 5.
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-only-change-me")
+IS_PROD = os.environ.get("APP_ENV") == "production"
+_secret = os.environ.get("SECRET_KEY")
+if IS_PROD and not _secret:
+    raise RuntimeError("SECRET_KEY must be set in production")
+
+app.config["SECRET_KEY"] = _secret or "dev-only-change-me"
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = IS_PROD
+app.config["MAX_CONTENT_LENGTH"] = 32 * 1024  # reject request bodies over 32 KB
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_FILE = os.path.join(BASE_DIR, "app.db")
@@ -69,6 +75,12 @@ def init_db():
 
 init_db()
 
+@app.after_request
+def add_security_headers(resp):
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["X-Frame-Options"] = "DENY"
+    resp.headers["Referrer-Policy"] = "same-origin"
+    return resp
 
 # ---------- Auth helpers ----------
 def login_required(view):
@@ -234,4 +246,4 @@ def set_theme():
     return jsonify({"ok": True})
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(debug=not IS_PROD, port=5000)

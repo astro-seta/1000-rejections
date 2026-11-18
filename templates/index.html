@@ -939,8 +939,21 @@ window.addEventListener('resize', () => {
 });
 
 // Load data from server
+async function api(url, options) {
+  const res = await fetch(url, options);
+  if (res.status === 401) {
+    window.location.href = '/login';
+    throw new Error('Logged out');
+  }
+  if (!res.ok) {
+    alert('Something went wrong and your change was not saved. Please try again.');
+    throw new Error('Request failed: ' + res.status);
+  }
+  return res;
+}
+
 async function loadData() {
-  const res = await fetch('/api/cells');
+  const res = await api('/api/cells');
   cellData = await res.json();
   buildGrid();
   updateStats();
@@ -1073,7 +1086,7 @@ async function saveEntry() {
   if (!title) { document.getElementById('input-title').focus(); return; }
   const desc = document.getElementById('input-desc').value.trim();
   const payload = { title, desc, status: 'pending', date: new Date().toISOString() };
-  await fetch(`/api/cells/${activeCellId}`, {
+  await api(`/api/cells/${activeCellId}`, {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify(payload)
@@ -1089,7 +1102,7 @@ async function setOutcome(outcome) {
   const d = cellData[activeCellId];
   d.status = outcome;
   d.outcomeDate = new Date().toISOString();
-  await fetch(`/api/cells/${activeCellId}`, {
+  await api(`/api/cells/${activeCellId}`, {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify(d)
@@ -1102,7 +1115,7 @@ async function setOutcome(outcome) {
 }
 
 async function resetCell() {
-  await fetch(`/api/cells/${activeCellId}`, { method: 'DELETE' });
+  await api(`/api/cells/${activeCellId}`, { method: 'DELETE' });
   delete cellData[activeCellId];
   const td = document.getElementById(`cell-${activeCellId}`);
   if (td) td.className = '';
@@ -1145,7 +1158,7 @@ function applyTheme(id, save) {
   document.querySelectorAll('.theme-opt').forEach(b =>
     b.classList.toggle('active', b.dataset.id === id));
   if (save) {
-    fetch('/api/theme', {
+    api('/api/theme', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ theme: id })
