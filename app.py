@@ -2,15 +2,16 @@ import os
 import re
 import sqlite3
 from functools import wraps
-from werkzeug.middleware.proxy_fix import ProxyFix
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 
 from flask import (Flask, render_template, request, jsonify, g,
                    session, redirect, url_for)
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.middleware.proxy_fix import ProxyFix
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 app = Flask(__name__)
+
 IS_PROD = os.environ.get("APP_ENV") == "production"
 _secret = os.environ.get("SECRET_KEY")
 if IS_PROD and not _secret:
@@ -89,12 +90,14 @@ def init_db():
 
 init_db()
 
+
 @app.after_request
 def add_security_headers(resp):
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["X-Frame-Options"] = "DENY"
     resp.headers["Referrer-Policy"] = "same-origin"
     return resp
+
 
 @app.errorhandler(429)
 def too_many_requests(e):
@@ -105,6 +108,7 @@ def too_many_requests(e):
         "auth.html", mode=mode, username="",
         error="Too many attempts. Please wait a while and try again."
     ), 429
+
 
 # ---------- Auth helpers ----------
 def login_required(view):
@@ -130,7 +134,7 @@ def signup():
         return redirect(url_for("index"))
     error, username = None, ""
     if request.method == "POST":
-                    if request.form.get("alt_contact"):
+        if request.form.get("alt_contact"):
             # Bots fill the hidden field. Pretend nothing happened.
             return redirect(url_for("login"))
         username = request.form.get("username", "").strip().lower()
@@ -166,8 +170,6 @@ def login():
         return redirect(url_for("index"))
     error, username = None, ""
     if request.method == "POST":
-
- 
         username = request.form.get("username", "").strip().lower()
         password = request.form.get("password", "")
         row = get_db().execute(
@@ -198,6 +200,14 @@ def index():
     ).fetchone()
     theme = row["theme"] if row else "coquette"
     return render_template("index.html", username=session["username"], theme=theme)
+
+
+@app.route("/api/session", methods=["GET"])
+@login_required
+def check_session():
+    resp = jsonify({"ok": True})
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 @app.route("/api/cells", methods=["GET"])
@@ -276,12 +286,6 @@ def set_theme():
     db.commit()
     return jsonify({"ok": True})
 
-@app.route("/api/session", methods=["GET"])
-@login_required
-def check_session():
-    resp = jsonify({"ok": True})
-    resp.headers["Cache-Control"] = "no-store"
-    return resp
 
 if __name__ == "__main__":
     app.run(debug=not IS_PROD, port=5000)
